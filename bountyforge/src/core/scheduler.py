@@ -3,7 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import asyncio
 from datetime import datetime
-
+from typing import list
 class ScanScheduler:
     def __init__(self, targets: List[str], callback, time_str: str = "02:00"):
         """
