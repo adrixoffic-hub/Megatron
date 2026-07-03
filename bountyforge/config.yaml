@@ -1,1 +1,41 @@
 
+# ================== TOOL PATHS (Updated) ==================
+tools:
+  subfinder: "subfinder"
+  httpx: "httpx"
+  nuclei: "nuclei"
+  gau: "gau"
+  waybackurls: "waybackurls"
+  ffuf: "ffuf"
+  nmap: "nmap"
+  masscan: "masscan"            # NEW
+  sqlmap: "sqlmap"
+  gowitness: "gowitness"
+  theharvester: "theharvester"
+  katana: "katana"
+  gitleaks: "gitleaks"          # NEW
+
+# ================== CLOUD ENUM ==================
+cloud:
+  aws_bucket_wordlist: "wordlists/buckets.txt"   # Common bucket names
+  azure_storage_wordlist: "wordlists/azure.txt"
+
+# ================== METASPLOIT RPC ==================
+metasploit:
+  host: "127.0.0.1"
+  port: 55553
+  user: "msf"
+  password: "msf_password"
+
+# ================== SCHEDULER ==================
+scheduler:
+  enabled: true
+  targets: ["example.com", "target.org", "api.test.com"]   # List of domains
+  schedule_time: "02:00"      # Daily 2 AM scan
+  run_on_start: false
+
+# ================== BURP/ZAP PROXY ==================
+burp:
+  proxy_host: "127.0.0.1"
+  proxy_port: 8080
+  capture_duration: 60        # Capture traffic for 60 seconds
