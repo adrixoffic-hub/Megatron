@@ -3,7 +3,7 @@ import asyncio
 import jwt
 import json
 import re
-import websockets                     # <-- Moved import to top for clarity
+import websockets
 from anthropic import Anthropic, RateLimitError
 from src.core.capsule import Capsule
 from src.core.account_pool import AccountPool
@@ -48,22 +48,21 @@ class BugBountyAgent:
                         )
                         reply = resp.content[0].text
                         if self.bypass.detect_refusal(reply):
-                            # <-- FIXED: release account before breaking to next level
-                            self.pool.release(acc, 5)
+                            self.pool.release(acc, 5)      # release before breaking
                             break
-                        # Success – release account and return reply
-                        self.pool.release(acc, 0)          # <-- FIXED: release on success
+                        # Success: release account and save history
+                        self.pool.release(acc, 0)
                         messages.append({"role": "user", "content": user_prompt})
                         messages.append({"role": "assistant", "content": reply})
                         self.capsule.save(messages)
                         return reply
                     except RateLimitError:
                         self.pool.release(acc, 90)
-                    except Exception:
+                    except Exception as e:
+                        print(f"API error: {e}")
                         self.pool.release(acc, 30)
             return "❌ All attempts failed."
 
-    # ---- JWT Bruteforce ----
     async def analyze_jwt(self, token):
         try:
             payload = jwt.decode(token, options={"verify_signature": False})
@@ -72,8 +71,8 @@ class BugBountyAgent:
         try:
             with open(self.jwt_wordlist, 'r') as f:
                 secrets = f.read().splitlines()
-        except:
-            secrets = ["secret","password","123456"]
+        except FileNotFoundError:
+            secrets = ["secret", "password", "123456"]
         for secret in secrets[:100]:
             try:
                 decoded = jwt.decode(token, secret, algorithms=['HS256'])
@@ -82,7 +81,6 @@ class BugBountyAgent:
                 pass
         return {"status": "UNCRACKED", "payload": payload}
 
-    # ---- WebSocket Fuzzing ----
     async def websocket_fuzz(self, ws_url, messages):
         findings = []
         for msg in messages:
@@ -96,7 +94,6 @@ class BugBountyAgent:
                 findings.append({"payload": msg, "error": str(e)})
         return findings
 
-    # ---- Log4Shell Detection ----
     async def log4shell_scan(self, url):
         prompt = f"Check if {url} is vulnerable to Log4Shell. Provide a detailed analysis."
         return await self.send_prompt(prompt, system_override="You are a Log4Shell expert.")
