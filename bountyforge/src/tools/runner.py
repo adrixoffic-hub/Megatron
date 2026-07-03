@@ -13,14 +13,22 @@ class ToolRunner:
         self.notifier = Notifier(config)
 
     async def run_command(self, cmd, use_proxy=True):
-        if use_proxy:
-            proxy = self.proxy_manager.get_random_proxy()
-            cmd = self.proxy_manager.apply_to_command(cmd, proxy)
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    if use_proxy:
+        proxy = self.proxy_manager.get_random_proxy()
+        cmd = self.proxy_manager.apply_to_command(cmd, proxy)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0 and stderr:
             print(f"⚠️ Cmd error: {stderr.decode()[:200]}")
         return stdout.decode()
+    except FileNotFoundError:
+        # Tool not installed or not in PATH
+        return f"❌ ERROR: '{cmd[0]}' not found. Please install it and add to PATH."
 
     async def recon_subdomains(self, domain):
         cmd = [self.binaries.get('subfinder', 'subfinder'), '-d', domain, '-silent']
