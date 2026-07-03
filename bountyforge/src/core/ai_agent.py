@@ -1,9 +1,9 @@
-
 import yaml
 import asyncio
 import jwt
 import json
 import re
+import websockets                     # <-- Moved import to top for clarity
 from anthropic import Anthropic, RateLimitError
 from src.core.capsule import Capsule
 from src.core.account_pool import AccountPool
@@ -48,7 +48,11 @@ class BugBountyAgent:
                         )
                         reply = resp.content[0].text
                         if self.bypass.detect_refusal(reply):
+                            # <-- FIXED: release account before breaking to next level
+                            self.pool.release(acc, 5)
                             break
+                        # Success – release account and return reply
+                        self.pool.release(acc, 0)          # <-- FIXED: release on success
                         messages.append({"role": "user", "content": user_prompt})
                         messages.append({"role": "assistant", "content": reply})
                         self.capsule.save(messages)
@@ -59,7 +63,7 @@ class BugBountyAgent:
                         self.pool.release(acc, 30)
             return "❌ All attempts failed."
 
-    # ---- NEW: JWT Bruteforce ----
+    # ---- JWT Bruteforce ----
     async def analyze_jwt(self, token):
         try:
             payload = jwt.decode(token, options={"verify_signature": False})
@@ -78,9 +82,8 @@ class BugBountyAgent:
                 pass
         return {"status": "UNCRACKED", "payload": payload}
 
-    # ---- NEW: WebSocket Fuzzing ----
+    # ---- WebSocket Fuzzing ----
     async def websocket_fuzz(self, ws_url, messages):
-        import websockets
         findings = []
         for msg in messages:
             try:
@@ -93,7 +96,7 @@ class BugBountyAgent:
                 findings.append({"payload": msg, "error": str(e)})
         return findings
 
-    # ---- NEW: Log4Shell Detection ----
+    # ---- Log4Shell Detection ----
     async def log4shell_scan(self, url):
         prompt = f"Check if {url} is vulnerable to Log4Shell. Provide a detailed analysis."
         return await self.send_prompt(prompt, system_override="You are a Log4Shell expert.")
