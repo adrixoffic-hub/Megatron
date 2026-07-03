@@ -20,3 +20,16 @@ class MasscanWrapper:
                 for p in match:
                     ports.append({"port": p[0], "protocol": p[1], "service": p[2]})
         return ports
+# Inside the menu loop, add these choices:
+console.print("[13] Masscan (Super-fast port scan)")
+console.print("[14] GraphQL Introspection + IDOR Check")
+console.print("[15] Cloud Enumeration (AWS S3 / Azure Blob)")
+console.print("[16] GitLeaks Scan (GitHub secrets)")
+console.print("[17] Log4Shell Deep Scan (Nuclei + AI)")
+console.print("[18] Auto-Exploit RCE (Metasploit) - DANGEROUS")
+console.print("[19] Regression Testing (Compare previous scans)")
+console.print("[20] AI Report Summarization (NLP)")
+console.print("[21] Start Scheduler (Auto-scan daily at 2 AM)")
+console.print("[22] Burp/ZAP Traffic Analyzer")
+
+# Implement these choices by calling the respective methods from new classes.
