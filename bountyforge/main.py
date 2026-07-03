@@ -15,7 +15,7 @@ from src.core.metasploit_rpc import MetasploitRPC
 from src.core.regression import RegressionEngine
 from src.core.summarizer import Summarizer
 from src.core.scheduler import ScanScheduler
-from src.core.burp_integration import BurpTrafficCapture   # <-- FIX: correct class name
+from src.core.burp_integration import BurpTrafficCapture
 import yaml
 
 console = Console()
@@ -71,9 +71,12 @@ class BountyForge:
                     console.print("[red]Set target first[/red]")
                     await asyncio.sleep(1)
                     continue
-                subs = await self.runner.recon_subdomains(self.target)
-                self.live_hosts = await self.runner.probe_http(subs)
-                console.print(f"[green]Found {len(self.live_hosts)} live hosts[/green]")
+                try:
+                    subs = await self.runner.recon_subdomains(self.target)
+                    self.live_hosts = await self.runner.probe_http(subs)
+                    console.print(f"[green]Found {len(self.live_hosts)} live hosts[/green]")
+                except Exception as e:
+                    console.print(f"[red]Recon failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "3":
@@ -82,9 +85,12 @@ class BountyForge:
                     await asyncio.sleep(1)
                     continue
                 domains = [h.get('host') for h in self.live_hosts if h.get('host')]
-                findings = await self.runner.run_nuclei(domains)
-                report = await self.ai.send_prompt(f"Triage these findings: {json.dumps(findings)[:5000]}")
-                console.print(Panel(report, title="AI Triage"))
+                try:
+                    findings = await self.runner.run_nuclei(domains)
+                    report = await self.ai.send_prompt(f"Triage these findings: {json.dumps(findings)[:5000]}")
+                    console.print(Panel(report, title="AI Triage"))
+                except Exception as e:
+                    console.print(f"[red]Triage failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "4":
@@ -148,7 +154,7 @@ class BountyForge:
 
             elif choice == "12":
                 ws_url = Prompt.ask("Enter WS URL (ws://...)")
-                msgs = ["test", "<script>alert(1)</script>", "' OR '1'='1"]
+                msgs = ["test", "<script>alert(1)</script>", "' OR '1'='1"]   # removed empty string
                 findings = await self.ai.websocket_fuzz(ws_url, msgs)
                 console.print(f"[yellow]{findings}[/yellow]")
                 await asyncio.sleep(2)
@@ -161,8 +167,9 @@ class BountyForge:
                 await asyncio.sleep(2)
 
             elif choice == "14":
-                # (Optional improvement: load wordlist from config)
-                enum = CloudEnumerator(["test", "dev"])
+                cloud_cfg = self.config.get('cloud', {})
+                wordlist_path = cloud_cfg.get('aws_bucket_wordlist', 'wordlists/buckets.txt')
+                enum = CloudEnumerator(wordlist_path)
                 s3 = await enum.enumerate_s3(self.target)
                 az = await enum.enumerate_azure(self.target)
                 console.print(f"[green]S3: {s3}\nAzure: {az}[/green]")
@@ -184,20 +191,20 @@ class BountyForge:
             elif choice == "17":
                 target = Prompt.ask("Enter target IP")
                 msf = MetasploitRPC(self.config.get('metasploit', {}))
-                result = msf.exploit_rce(target, 80)          # <-- FIXED method name
+                result = msf.exploit_rce(target, 80)
                 console.print(f"[red]⚠️ {result}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "18":
                 reg = RegressionEngine("bounty.db")
-                result = reg.compare_scans(self.target)       # <-- FIXED method name
+                result = reg.compare_scans(self.target)
                 console.print(Panel(str(result), title="Regression"))
                 await asyncio.sleep(2)
 
             elif choice == "19":
                 report = Prompt.ask("Paste raw report text")
                 summ = Summarizer(self.ai)
-                summary = await summ.summarize(raw_report=report)   # <-- FIXED keyword argument
+                summary = await summ.summarize(raw_report=report)
                 console.print(Panel(summary, title="AI Summary"))
                 await asyncio.sleep(2)
 
@@ -207,7 +214,6 @@ class BountyForge:
                     console.print("[red]Add targets in config.yaml[/red]")
                     await asyncio.sleep(1)
                     continue
-                # FIXED: callback wrapper to pass list of one target
                 scheduler = ScanScheduler(targets, lambda t: self.runner.run_nuclei([t]))
                 scheduler.start()
                 console.print("[green]Scheduler started! Daily 2AM scan active.[/green]")
@@ -215,7 +221,7 @@ class BountyForge:
 
             elif choice == "21":
                 url = Prompt.ask("Enter URL to browse")
-                burp = BurpTrafficCapture(                     # <-- FIXED class name
+                burp = BurpTrafficCapture(
                     self.config['burp']['proxy_host'],
                     self.config['burp']['proxy_port']
                 )
@@ -224,6 +230,10 @@ class BountyForge:
                 await asyncio.sleep(2)
 
             elif choice == "22":
+                if not os.path.exists("src/web/dashboard.py"):
+                    console.print("[red]Dashboard file not found![/red]")
+                    await asyncio.sleep(1)
+                    continue
                 console.print("[green]Launching Dashboard at http://localhost:8501[/green]")
                 os.system("streamlit run src/web/dashboard.py &")
                 await asyncio.sleep(2)
