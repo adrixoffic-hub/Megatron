@@ -1,8 +1,8 @@
-
 import asyncio
 import json
 import re
 import os
+import httpx                     # <-- Added for async HTTP
 from src.core.proxy_manager import ProxyManager
 from src.core.notifier import Notifier
 
@@ -53,56 +53,60 @@ class ToolRunner:
                 pass
         return findings
 
-    # ---- NEW: Masscan ----
+    # ---- Masscan ----
     async def run_masscan(self, ip, rate=10000):
         cmd = [self.binaries.get('masscan', 'masscan'), '-p1-65535', ip, '--rate', str(rate), '-oG', '-']
         out = await self.run_command(cmd)
         ports = re.findall(r'(\d+)/open/([^/]+)/([^\s,]+)', out)
         return [{"port": p[0], "protocol": p[1], "service": p[2]} for p in ports]
 
-    # ---- NEW: Nmap ----
+    # ---- Nmap ----
     async def run_nmap(self, ip):
         cmd = [self.binaries.get('nmap', 'nmap'), '-T4', '-p-', ip, '-oG', '-']
         out = await self.run_command(cmd)
         ports = re.findall(r'(\d+)/open/([^/]+)/([^\s]+)', out)
         return [{"port": p[0], "service": p[1], "version": p[2]} for p in ports]
 
-    # ---- NEW: SQLMap ----
+    # ---- SQLMap ----
     async def run_sqlmap(self, url, params=""):
         cmd = [self.binaries.get('sqlmap', 'sqlmap'), '-u', url, '--batch', '--threads', '5']
         if params:
             cmd.extend(['-p', params])
         return await self.run_command(cmd)
 
-    # ---- NEW: Gowitness ----
+    # ---- Gowitness (FIXED: create directory) ----
     async def run_gowitness(self, urls):
+        os.makedirs("./screenshots", exist_ok=True)          # <-- FIX: ensure folder exists
         with open('/tmp/shot.txt', 'w') as f:
             f.write('\n'.join(urls))
         cmd = [self.binaries.get('gowitness', 'gowitness'), 'file', '-f', '/tmp/shot.txt', '--destination', './screenshots/']
         await self.run_command(cmd)
         return "./screenshots/"
 
-    # ---- NEW: TheHarvester ----
+    # ---- TheHarvester ----
     async def run_theharvester(self, domain):
         cmd = [self.binaries.get('theharvester', 'theharvester'), '-d', domain, '-b', 'google,linkedin']
         out = await self.run_command(cmd)
         return list(set(re.findall(r'[\w\.-]+@[\w\.-]+', out)))
 
-    # ---- NEW: JS Endpoint Extraction (Katana) ----
+    # ---- JS Endpoint Extraction (FIXED: use httpx instead of curl) ----
     async def extract_js_endpoints(self, domain):
         cmd = [self.binaries.get('katana', 'katana'), '-u', f"https://{domain}", '-jc', '-silent']
         out = await self.run_command(cmd)
         js_urls = [l for l in out.splitlines() if '.js' in l]
         endpoints = set()
-        for js in js_urls[:30]:
-            try:
-                content = await self.run_command(['curl', '-s', js])
-                endpoints.update(re.findall(r'["\'](/[a-zA-Z0-9/_.-]+)["\']', content))
-            except:
-                pass
+        async with httpx.AsyncClient(timeout=10.0) as client:   # <-- FIX: httpx replaces curl
+            for js in js_urls[:30]:
+                try:
+                    resp = await client.get(js)
+                    if resp.status_code == 200:
+                        content = resp.text
+                        endpoints.update(re.findall(r'["\'](/[a-zA-Z0-9/_.-]+)["\']', content))
+                except Exception:
+                    continue
         return list(endpoints)
 
-    # ---- NEW: Custom Wordlist ----
+    # ---- Custom Wordlist ----
     async def generate_wordlist(self, tech_stack, domain):
         base = ['admin', 'api', 'v1', 'v2', 'test', 'dev', 'backup', '.env', '.git']
         tech_map = {'react': ['component','state','redux'], 'php': ['wp-admin','plugins'], 'node': ['node_modules','dist']}
