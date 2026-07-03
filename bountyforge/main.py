@@ -192,11 +192,11 @@ class BountyForge:
                 await asyncio.sleep(2)
 
             elif choice == "17":
-                target = Prompt.ask("Enter target IP")
-                msf = MetasploitRPC(self.config.get('metasploit', {}))
-                result = msf.exploit_rce(target, 80)
-                console.print(f"[red]⚠️ {result}[/red]")
-                await asyncio.sleep(2)
+    target = Prompt.ask("Enter target IP")
+    msf = MetasploitRPC(self.config.get('metasploit', {}))
+    result = await msf.exploit_rce(target, 80)  # <-- Added 'await'
+    console.print(f"[red]⚠️ {result}[/red]")
+    await asyncio.sleep(2)
 
             elif choice == "18":
                 reg = RegressionEngine("bounty.db")
