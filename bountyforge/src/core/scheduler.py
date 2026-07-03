@@ -1,36 +1,33 @@
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-import asyncio
-from datetime import datetime
-from typing import list
+from typing import List, Callable, Awaitable, Any
+
 class ScanScheduler:
-    def __init__(self, targets: List[str], callback, time_str: str = "02:00"):
+    def __init__(self, targets: List[str], callback: Callable[[str], Awaitable[Any]], time_str: str = "02:00"):
         """
-        callback: Function to execute (e.g., run_full_pipeline)
+        targets: List of domains to scan
+        callback: Async function to call for each target (e.g., run_nuclei)
         time_str: "HH:MM" 24-hour format
         """
         self.targets = targets
         self.callback = callback
-        hour, minute = map(int, time_str.split(':'))
-        self.trigger = CronTrigger(hour=hour, minute=minute)
+        try:
+            hour, minute = map(int, time_str.split(':'))
+            self.trigger = CronTrigger(hour=hour, minute=minute)
+        except ValueError:
+            self.trigger = CronTrigger(hour=2, minute=0)  # Fallback to 2 AM
         self.scheduler = AsyncIOScheduler()
 
-    async def run_scheduled_job(self):
-        print(f"[{datetime.now()}] Scheduled scan starting for {len(self.targets)} targets...")
-        for target in self.targets:
-            print(f"Scanning {target}...")
-            await self.callback(target)
-        print("Scheduled scan complete.")
-
     def start(self):
-        self.scheduler.add_job(
-            self.run_scheduled_job,
-            trigger=self.trigger,
-            id="daily_scan"
-        )
+        """Start the scheduler."""
+        for target in self.targets:
+            self.scheduler.add_job(
+                lambda t=target: self.callback([t]),
+                trigger=self.trigger,
+                id=f"scan_{target}"
+            )
         self.scheduler.start()
-        print(f"🕒 Scheduler started. Daily scan at {self.trigger.hour}:{self.trigger.minute}")
 
     def stop(self):
+        """Stop the scheduler."""
         self.scheduler.shutdown()
