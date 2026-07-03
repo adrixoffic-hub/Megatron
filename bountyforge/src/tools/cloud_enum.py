@@ -1,5 +1,6 @@
 import httpx
 import os
+import asyncio
 
 class CloudEnumerator:
     def __init__(self, wordlist):
@@ -16,8 +17,8 @@ class CloudEnumerator:
         parts = domain.split('.')
         base_names = [domain, domain.replace('.', '-')]
         if len(parts) >= 2:
-            base_names.append('.'.join(parts[-2:]))  # main domain
-            base_names.append(parts[0])              # first subdomain
+            base_names.append('.'.join(parts[-2:]))
+            base_names.append(parts[0])
         for name in set(base_names):
             for suffix in self.wordlist[:20]:
                 url = f"https://{name}-{suffix}.s3.amazonaws.com"
@@ -25,6 +26,7 @@ class CloudEnumerator:
                     resp = await httpx.head(url, timeout=5)
                     if resp.status_code in [200, 403]:
                         found.append(f"{url} ({resp.status_code})")
+                    await asyncio.sleep(0.1)
                 except:
                     pass
         return found
@@ -38,8 +40,8 @@ class CloudEnumerator:
             url = f"https://{account_name}.blob.core.windows.net/{cont}"
             try:
                 resp = await httpx.get(url, timeout=5)
-                if resp.status_code == 200:
-                    found.append(f"{url} (accessible)")
+                if resp.status_code in [200, 403]:     # 403 added
+                    found.append(f"{url} ({resp.status_code})")
             except:
                 pass
         return found
