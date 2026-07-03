@@ -6,7 +6,7 @@ class ScanScheduler:
     def __init__(self, targets: List[str], callback: Callable[[str], Awaitable[Any]], time_str: str = "02:00"):
         """
         targets: List of domains to scan
-        callback: Async function to call for each target (e.g., run_nuclei)
+        callback: Async function that takes a single domain (str) and returns Awaitable
         time_str: "HH:MM" 24-hour format
         """
         self.targets = targets
@@ -21,8 +21,9 @@ class ScanScheduler:
     def start(self):
         """Start the scheduler."""
         for target in self.targets:
+            # ✅ Fixed: pass target as a string, not wrapped in a list
             self.scheduler.add_job(
-                lambda t=target: self.callback([t]),
+                lambda t=target: self.callback(t),   # <-- changed from self.callback([t])
                 trigger=self.trigger,
                 id=f"scan_{target}"
             )
