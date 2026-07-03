@@ -1,4 +1,4 @@
-import requests
+import httpx
 
 class Notifier:
     def __init__(self, config):
@@ -9,13 +9,17 @@ class Notifier:
         self.discord = a.get('discord_webhook')
         self.enabled = a.get('enabled', False)
 
-    def send(self, title, message, severity="HIGH"):
+    async def send(self, title, message, severity="HIGH"):
         if not self.enabled:
             return
         msg = f"🚨 *{severity}*: {title}\n\n{message[:3000]}"
-        if self.slack:
-            requests.post(self.slack, json={"text": msg})
-        if self.telegram_token and self.telegram_chat:
-            requests.post(f"https://api.telegram.org/bot{self.telegram_token}/sendMessage", data={"chat_id": self.telegram_chat, "text": msg, "parse_mode": "Markdown"})
-        if self.discord:
-            requests.post(self.discord, json={"content": msg})
+        async with httpx.AsyncClient() as client:
+            if self.slack:
+                await client.post(self.slack, json={"text": msg})
+            if self.telegram_token and self.telegram_chat:
+                await client.post(
+                    f"https://api.telegram.org/bot{self.telegram_token}/sendMessage",
+                    data={"chat_id": self.telegram_chat, "text": msg, "parse_mode": "Markdown"}
+                )
+            if self.discord:
+                await client.post(self.discord, json={"content": msg})
