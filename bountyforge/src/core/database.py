@@ -16,7 +16,7 @@ class Database:
             await db.execute('''CREATE TABLE IF NOT EXISTS findings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 scan_id INTEGER, host TEXT, vulnerability TEXT,
-                severity TEXT, description TEXT, remedation TEXT
+                severity TEXT, description TEXT, remediation TEXT
             )''')
             await db.commit()
 
@@ -31,7 +31,7 @@ class Database:
             scan_id = cur.lastrowid
             for f in findings:
                 await db.execute(
-                    "INSERT INTO findings (scan_id, host, vulnerability, severity, description, remedation) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO findings (scan_id, host, vulnerability, severity, description, remediation) VALUES (?, ?, ?, ?, ?, ?)",
                     (scan_id, f.get('host'), f.get('name'), f.get('severity'), f.get('description'), f.get('remediation'))
                 )
             await db.commit()
