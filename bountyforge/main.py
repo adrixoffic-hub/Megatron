@@ -2,6 +2,9 @@ import asyncio
 import sys
 import os
 import json
+from src.core.regression import RegressionEngine
+from src.core.summarizer import Summarizer
+from src.core.scheduler import ScanScheduler
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.panel import Panel
