@@ -17,7 +17,7 @@ class Database:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 scan_id INTEGER, host TEXT, vulnerability TEXT,
                 severity TEXT, description TEXT, remediation TEXT
-            )''')
+            )''')   # Column now matches INSERT
             await db.commit()
 
     async def save_scan(self, target, findings):
