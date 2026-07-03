@@ -6,7 +6,7 @@ class GraphQLScanner:
         self.proxy = proxy
 
     async def introspect(self, url):
-        async with httpx.AsyncClient(proxies=self.proxy, timeout=15.0) as client:   # added timeout
+        async with httpx.AsyncClient(proxy=self.proxy, timeout=15.0) as client:
             query = "{ __schema { types { name fields { name } } } }"
             resp = await client.post(url, json={"query": query})
             if resp.status_code == 200:
