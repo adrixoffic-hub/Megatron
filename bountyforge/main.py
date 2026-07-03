@@ -15,7 +15,7 @@ from src.core.metasploit_rpc import MetasploitRPC
 from src.core.regression import RegressionEngine
 from src.core.summarizer import Summarizer
 from src.core.scheduler import ScanScheduler
-from src.core.burp_integration import BurpTraffic
+from src.core.burp_integration import BurpTrafficCapture   # <-- FIX: correct class name
 import yaml
 
 console = Console()
@@ -161,6 +161,7 @@ class BountyForge:
                 await asyncio.sleep(2)
 
             elif choice == "14":
+                # (Optional improvement: load wordlist from config)
                 enum = CloudEnumerator(["test", "dev"])
                 s3 = await enum.enumerate_s3(self.target)
                 az = await enum.enumerate_azure(self.target)
@@ -183,20 +184,20 @@ class BountyForge:
             elif choice == "17":
                 target = Prompt.ask("Enter target IP")
                 msf = MetasploitRPC(self.config.get('metasploit', {}))
-                result = msf.exploit(target, 80)
+                result = msf.exploit_rce(target, 80)          # <-- FIXED method name
                 console.print(f"[red]⚠️ {result}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "18":
                 reg = RegressionEngine("bounty.db")
-                result = reg.compare(self.target)
+                result = reg.compare_scans(self.target)       # <-- FIXED method name
                 console.print(Panel(str(result), title="Regression"))
                 await asyncio.sleep(2)
 
             elif choice == "19":
                 report = Prompt.ask("Paste raw report text")
                 summ = Summarizer(self.ai)
-                summary = await summ.summarize(report)
+                summary = await summ.summarize(raw_report=report)   # <-- FIXED keyword argument
                 console.print(Panel(summary, title="AI Summary"))
                 await asyncio.sleep(2)
 
@@ -206,14 +207,15 @@ class BountyForge:
                     console.print("[red]Add targets in config.yaml[/red]")
                     await asyncio.sleep(1)
                     continue
-                scheduler = ScanScheduler(targets, self.runner.run_nuclei)
+                # FIXED: callback wrapper to pass list of one target
+                scheduler = ScanScheduler(targets, lambda t: self.runner.run_nuclei([t]))
                 scheduler.start()
                 console.print("[green]Scheduler started! Daily 2AM scan active.[/green]")
                 await asyncio.sleep(2)
 
             elif choice == "21":
                 url = Prompt.ask("Enter URL to browse")
-                burp = BurpTraffic(
+                burp = BurpTrafficCapture(                     # <-- FIXED class name
                     self.config['burp']['proxy_host'],
                     self.config['burp']['proxy_port']
                 )
