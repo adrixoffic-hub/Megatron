@@ -14,6 +14,7 @@ from src.core.regression import RegressionEngine
 from src.core.summarizer import Summarizer
 from src.core.scheduler import ScanScheduler
 from src.core.burp_integration import BurpTrafficCapture
+from src.core.database import Database          # <-- added
 
 from src.tools.runner import ToolRunner
 from src.tools.masscan import MasscanWrapper
@@ -25,14 +26,20 @@ console = Console()
 
 class BountyForge:
     def __init__(self):
-        with open("config.yaml") as f:
-            self.config = yaml.safe_load(f)
+        try:
+            with open("config.yaml") as f:
+                self.config = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            console.print(f"[red]Config error: {e}[/red]")
+            sys.exit(1)
         self.ai = BugBountyAgent("config.yaml")
         self.runner = ToolRunner(self.config)
+        self.db = Database(self.config)           # <-- instantiate DB
         self.target = None
         self.live_hosts = []
 
     async def menu(self):
+        await self.db.init_db()                   # <-- create tables
         while True:
             console.clear()
             console.print(Panel.fit("[bold cyan]🔮 BOUNTYFORGE ZENITH (All 22 Features)[/bold cyan]", border_style="cyan"))
@@ -87,32 +94,45 @@ class BountyForge:
                     console.print("[red]Run Recon first[/red]")
                     await asyncio.sleep(1)
                     continue
-                domains = [h.get('host') for h in self.live_hosts if h.get('host')]
                 try:
+                    domains = [h.get('host') for h in self.live_hosts if h.get('host')]
                     findings = await self.runner.run_nuclei(domains)
                     report = await self.ai.send_prompt(f"Triage these findings: {json.dumps(findings)[:5000]}")
                     console.print(Panel(report, title="AI Triage"))
+                    # Save findings to DB
+                    if findings:
+                        await self.db.save_scan(self.target, findings)
+                        console.print("[green]Scan results saved to database.[/green]")
                 except Exception as e:
                     console.print(f"[red]Triage failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "4":
                 ip = Prompt.ask("Enter IP")
-                wrapper = MasscanWrapper(self.runner)
-                ports = await wrapper.scan_ports(ip)
-                console.print(f"[green]Open ports: {ports}[/green]")
+                try:
+                    wrapper = MasscanWrapper(self.runner)
+                    ports = await wrapper.scan_ports(ip)
+                    console.print(f"[green]Open ports: {ports}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Masscan failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "5":
                 ip = Prompt.ask("Enter IP")
-                ports = await self.runner.run_nmap(ip)
-                console.print(f"[green]{ports}[/green]")
+                try:
+                    ports = await self.runner.run_nmap(ip)
+                    console.print(f"[green]{ports}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Nmap failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "6":
                 url = Prompt.ask("Enter URL with param (e.g., http://x.com?id=1)")
-                out = await self.runner.run_sqlmap(url)
-                console.print(Panel(out[:1000], title="SQLMap Output"))
+                try:
+                    out = await self.runner.run_sqlmap(url)
+                    console.print(Panel(out[:1000], title="SQLMap Output"))
+                except Exception as e:
+                    console.print(f"[red]SQLMap failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "7":
@@ -120,9 +140,12 @@ class BountyForge:
                     console.print("[red]Run Recon first[/red]")
                     await asyncio.sleep(1)
                     continue
-                urls = [h.get('url') for h in self.live_hosts if h.get('url')]
-                path = await self.runner.run_gowitness(urls)
-                console.print(f"[green]Screenshots saved to {path}[/green]")
+                try:
+                    urls = [h.get('url') for h in self.live_hosts if h.get('url')]
+                    path = await self.runner.run_gowitness(urls)
+                    console.print(f"[green]Screenshots saved to {path}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Gowitness failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "8":
@@ -130,8 +153,11 @@ class BountyForge:
                     console.print("[red]Set target first[/red]")
                     await asyncio.sleep(1)
                     continue
-                emails = await self.runner.run_theharvester(self.target)
-                console.print(f"[green]Emails: {emails}[/green]")
+                try:
+                    emails = await self.runner.run_theharvester(self.target)
+                    console.print(f"[green]Emails: {emails}[/green]")
+                except Exception as e:
+                    console.print(f"[red]TheHarvester failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "9":
@@ -139,97 +165,136 @@ class BountyForge:
                     console.print("[red]Set target first[/red]")
                     await asyncio.sleep(1)
                     continue
-                endpoints = await self.runner.extract_js_endpoints(self.target)
-                console.print(f"[green]Found {len(endpoints)} JS endpoints[/green]")
+                try:
+                    endpoints = await self.runner.extract_js_endpoints(self.target)
+                    console.print(f"[green]Found {len(endpoints)} JS endpoints[/green]")
+                except Exception as e:
+                    console.print(f"[red]JS extraction failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "10":
                 tech = Prompt.ask("Tech stack (comma separated, e.g., react,php)").split(',')
-                path = await self.runner.generate_wordlist(tech, self.target)
-                console.print(f"[green]Wordlist saved: {path}[/green]")
+                try:
+                    path = await self.runner.generate_wordlist(tech, self.target)
+                    console.print(f"[green]Wordlist saved: {path}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Wordlist generation failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "11":
                 token = Prompt.ask("Enter JWT token")
-                result = await self.ai.analyze_jwt(token)
-                console.print(Panel(str(result), title="JWT Analysis"))
+                try:
+                    result = await self.ai.analyze_jwt(token)
+                    console.print(Panel(str(result), title="JWT Analysis"))
+                except Exception as e:
+                    console.print(f"[red]JWT analysis failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "12":
                 ws_url = Prompt.ask("Enter WS URL (ws://...)")
-                msgs = ["test", "<script>alert(1)</script>", "' OR '1'='1"]   # removed empty string
-                findings = await self.ai.websocket_fuzz(ws_url, msgs)
-                console.print(f"[yellow]{findings}[/yellow]")
+                msgs = ["test", "<script>alert(1)</script>", "' OR '1'='1"]
+                try:
+                    findings = await self.ai.websocket_fuzz(ws_url, msgs)
+                    console.print(f"[yellow]{findings}[/yellow]")
+                except Exception as e:
+                    console.print(f"[red]WebSocket fuzzing failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "13":
                 url = Prompt.ask("Enter GraphQL endpoint")
-                scanner = GraphQLScanner()
-                result = await scanner.introspect(url)
-                console.print(Panel(str(result), title="GraphQL"))
+                try:
+                    scanner = GraphQLScanner()
+                    result = await scanner.introspect(url)
+                    console.print(Panel(str(result), title="GraphQL"))
+                except Exception as e:
+                    console.print(f"[red]GraphQL scan failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "14":
-                cloud_cfg = self.config.get('cloud', {})
-                wordlist_path = cloud_cfg.get('aws_bucket_wordlist', 'wordlists/buckets.txt')
-                enum = CloudEnumerator(wordlist_path)
-                s3 = await enum.enumerate_s3(self.target)
-                az = await enum.enumerate_azure(self.target)
-                console.print(f"[green]S3: {s3}\nAzure: {az}[/green]")
+                try:
+                    cloud_cfg = self.config.get('cloud', {})
+                    wordlist_path = cloud_cfg.get('aws_bucket_wordlist', 'wordlists/buckets.txt')
+                    enum = CloudEnumerator(wordlist_path)
+                    s3 = await enum.enumerate_s3(self.target)
+                    az = await enum.enumerate_azure(self.target)
+                    console.print(f"[green]S3: {s3}\nAzure: {az}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Cloud enumeration failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "15":
                 repo = Prompt.ask("GitHub repo URL")
-                gitleaks = GitLeaksScanner(self.runner)
-                result = await gitleaks.scan(repo)
-                console.print(Panel(str(result), title="GitLeaks"))
+                try:
+                    gitleaks = GitLeaksScanner(self.runner)
+                    result = await gitleaks.scan(repo)
+                    console.print(Panel(str(result), title="GitLeaks"))
+                except Exception as e:
+                    console.print(f"[red]GitLeaks failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "16":
                 url = Prompt.ask("Enter URL")
-                result = await self.ai.log4shell_scan(url)
-                console.print(Panel(result, title="Log4Shell AI"))
+                try:
+                    result = await self.ai.log4shell_scan(url)
+                    console.print(Panel(result, title="Log4Shell AI"))
+                except Exception as e:
+                    console.print(f"[red]Log4Shell scan failed: {e}[/red]")
                 await asyncio.sleep(2)
 
-            elif choice == "17":
-    target = Prompt.ask("Enter target IP")
-    msf = MetasploitRPC(self.config.get('metasploit', {}))
-    result = await msf.exploit_rce(target, 80)  # <-- Added 'await'
-    console.print(f"[red]⚠️ {result}[/red]")
-    await asyncio.sleep(2)
+            elif choice == "17":                           # <-- indentation fixed (16 spaces)
+                target = Prompt.ask("Enter target IP")
+                try:
+                    msf = MetasploitRPC(self.config.get('metasploit', {}))
+                    result = await msf.exploit_rce(target, 80)
+                    console.print(f"[red]⚠️ {result}[/red]")
+                except Exception as e:
+                    console.print(f"[red]Metasploit exploit failed: {e}[/red]")
+                await asyncio.sleep(2)
 
             elif choice == "18":
-                reg = RegressionEngine("bounty.db")
-                result = reg.compare_scans(self.target)
-                console.print(Panel(str(result), title="Regression"))
+                try:
+                    reg = RegressionEngine("bounty.db")
+                    result = await reg.compare_scans(self.target)
+                    console.print(Panel(str(result), title="Regression"))
+                except Exception as e:
+                    console.print(f"[red]Regression failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "19":
                 report = Prompt.ask("Paste raw report text")
-                summ = Summarizer(self.ai)
-                summary = await summ.summarize(raw_report=report)
-                console.print(Panel(summary, title="AI Summary"))
+                try:
+                    summ = Summarizer(self.ai)
+                    summary = await summ.summarize(raw_report=report)
+                    console.print(Panel(summary, title="AI Summary"))
+                except Exception as e:
+                    console.print(f"[red]Summarization failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "20":
-                targets = self.config.get('scheduler', {}).get('targets', [])
-                if not targets:
-                    console.print("[red]Add targets in config.yaml[/red]")
-                    await asyncio.sleep(1)
-                    continue
-                scheduler = ScanScheduler(targets, lambda t: self.runner.run_nuclei([t]))
-                scheduler.start()
-                console.print("[green]Scheduler started! Daily 2AM scan active.[/green]")
+                try:
+                    targets = self.config.get('scheduler', {}).get('targets', [])
+                    if not targets:
+                        console.print("[red]Add targets in config.yaml[/red]")
+                        await asyncio.sleep(1)
+                        continue
+                    scheduler = ScanScheduler(targets, lambda t: self.runner.run_nuclei([t]))
+                    scheduler.start()
+                    console.print("[green]Scheduler started! Daily 2AM scan active.[/green]")
+                except Exception as e:
+                    console.print(f"[red]Scheduler failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "21":
                 url = Prompt.ask("Enter URL to browse")
-                burp = BurpTrafficCapture(
-                    self.config['burp']['proxy_host'],
-                    self.config['burp']['proxy_port']
-                )
-                result = await burp.capture(url, 30)
-                console.print(f"[green]{result}[/green]")
+                try:
+                    burp = BurpTrafficCapture(
+                        self.config['burp']['proxy_host'],
+                        self.config['burp']['proxy_port']
+                    )
+                    result = await burp.capture(url, 30)
+                    console.print(f"[green]{result}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Burp capture failed: {e}[/red]")
                 await asyncio.sleep(2)
 
             elif choice == "22":
@@ -237,8 +302,11 @@ class BountyForge:
                     console.print("[red]Dashboard file not found![/red]")
                     await asyncio.sleep(1)
                     continue
-                console.print("[green]Launching Dashboard at http://localhost:8501[/green]")
-                os.system("streamlit run src/web/dashboard.py &")
+                try:
+                    console.print("[green]Launching Dashboard at http://localhost:8501[/green]")
+                    os.system("streamlit run src/web/dashboard.py &")
+                except Exception as e:
+                    console.print(f"[red]Dashboard launch failed: {e}[/red]")
                 await asyncio.sleep(2)
 
 async def main():
