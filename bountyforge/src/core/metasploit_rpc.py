@@ -11,7 +11,6 @@ class MetasploitRPC:
         self.authenticated = False
 
     async def _authenticate(self):
-        """Authenticate with Metasploit RPC server."""
         url = f"http://{self.host}:{self.port}/api/v1/auth/login"
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, json={"username": self.user, "password": self.password})
@@ -21,7 +20,6 @@ class MetasploitRPC:
         return self.authenticated
 
     async def _call(self, method: str, args: dict = None):
-        """Make an authenticated RPC call."""
         if not self.authenticated:
             await self._authenticate()
         if not self.authenticated:
@@ -33,12 +31,11 @@ class MetasploitRPC:
             return resp.json()
 
     async def exploit_rce(self, target: str, port: int, payload: str = "linux/x64/shell_reverse_tcp"):
-        """Trigger an RCE exploit via Metasploit RPC."""
         if not self.authenticated:
             await self._authenticate()
         if not self.authenticated:
             return {"error": "Authentication failed"}
-        # This is a placeholder – real implementation would use pymetasploit3
+        # Placeholder – real integration would use pymetasploit3
         return {
             "status": "triggered",
             "payload": payload,
