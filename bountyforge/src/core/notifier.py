@@ -12,7 +12,7 @@ class Notifier:
     def send(self, title, message, severity="HIGH"):
         if not self.enabled:
             return
-        msg = f"🚨 *{severity}*: {title}\\n\\n{message[:3000]}"
+        msg = f"🚨 *{severity}*: {title}\n\n{message[:3000]}"
         if self.slack:
             requests.post(self.slack, json={"text": msg})
         if self.telegram_token and self.telegram_chat:
